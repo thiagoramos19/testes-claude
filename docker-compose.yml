@@ -1,5 +1,5 @@
 # Receita para ligar o Unilink inteiro com um comando:
-#   docker compose up -d --build   -> liga o banco e o back-end
+#   docker compose up -d --build   -> liga o banco, o back-end e o site (localhost:8080)
 #   docker compose down            -> desliga (os dados ficam guardados)
 #   docker compose down -v         -> desliga e APAGA o banco (recria do zero no proximo up)
 
@@ -34,9 +34,13 @@ services:
       DB_PORT: 3306
       DB_USER: unilink
       DB_PASSWORD: unilink
+      FRONTEND_DIR: /app/frontend
       TZ: America/Sao_Paulo
     ports:
       - "8080:8080"
+    volumes:
+      # O site e lido direto da pasta frontend: mudou o HTML/CSS/JS, e so recarregar a pagina
+      - ./frontend:/app/frontend:ro
     depends_on:
       mysql:
         condition: service_healthy
