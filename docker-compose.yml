@@ -1,0 +1,45 @@
+# Receita para ligar o Unilink inteiro com um comando:
+#   docker compose up -d --build   -> liga o banco e o back-end
+#   docker compose down            -> desliga (os dados ficam guardados)
+#   docker compose down -v         -> desliga e APAGA o banco (recria do zero no proximo up)
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: unilink-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: unilink
+      MYSQL_DATABASE: unilink_db
+      MYSQL_USER: unilink
+      MYSQL_PASSWORD: unilink
+      TZ: America/Sao_Paulo
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      # Na primeira vez, o MySQL roda os scripts desta pasta em ordem alfabetica
+      - ./database:/docker-entrypoint-initdb.d:ro
+      - mysql-dados:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uunilink", "-punilink"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build: ./backend
+    container_name: unilink-backend
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: unilink
+      DB_PASSWORD: unilink
+      TZ: America/Sao_Paulo
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-dados:

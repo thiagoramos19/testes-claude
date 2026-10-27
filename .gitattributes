@@ -1,0 +1,5 @@
+# Garante que os scripts rodem igual no Windows, Mac e Linux
+* text=auto
+*.sh text eol=lf
+mvnw text eol=lf
+*.cmd text eol=crlf

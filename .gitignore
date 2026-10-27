@@ -1,0 +1,13 @@
+# Java / Maven
+backend/target/
+*.class
+
+# Editores e sistema
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Resultados brutos do k6 (os resumos e graficos entram no repositorio)
+testes-de-carga/**/bruto/
