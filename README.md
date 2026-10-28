@@ -107,6 +107,7 @@ Quem chama quem dentro do back-end: `Controller → Service → Repository → M
 | --- | --- | --- |
 | Login | `index.html` | UC02 |
 | Cadastro em 3 passos | `cadastro.html` | UC01 |
+| Recuperar senha | `recuperar-senha.html` | UC02 |
 | Início: stories, publicar, filtros e feed | `home.html` | UC08, UC09, UC10 |
 | Descobrir (cards) | `descobrir.html` | UC03 |
 | Joga pra Rolo | `jogaprarolo.html` | UC05, UC11 |
@@ -114,14 +115,45 @@ Quem chama quem dentro do back-end: `Controller → Service → Repository → M
 | Mensagens e Unibot | `mensagens.html` | UC04 |
 | Seu perfil e Central de Ajuda | `perfil.html` | UC07 |
 
-O feed da tela inicial já lê as postagens do banco. As outras telas ainda usam dados de exemplo
-(os mesmos da carga inicial) e passam a usar a API conforme cada endpoint fica pronto.
+Todas as telas leem e gravam no banco pela API. As exceções são as que o banco da especificação
+não tem onde guardar:
+
+- **Fotos** (foto de perfil, imagem da postagem e foto do story): aparecem só na tela de quem enviou.
+  O banco guarda a postagem e o story, mas não o arquivo. Cada pessoa aparece com as iniciais num círculo.
+- **Unibot**: as respostas (1 = cardápio, 2 = horário) ficam no próprio navegador.
+- **Sessão**: depois do login o estudante fica guardado no navegador (`localStorage`); não há token,
+  porque é um protótipo acadêmico.
 
 Como o site é lido direto da pasta `frontend`, depois de mudar um HTML, CSS ou JS basta recarregar a página.
 
 ## Endpoints disponíveis
 
-| Método | Endereço | O que faz |
-| --- | --- | --- |
-| GET | `/api/status` | Confere se o back-end e o banco estão no ar |
-| GET | `/api/postagens` | Lista as postagens do feed, da mais nova para a mais antiga |
+Todos recebem e devolvem JSON. Quando algo dá errado, a resposta traz o motivo em `message`
+(ex.: `400` campo inválido, `401` senha errada, `403` sem permissão, `404` não encontrado, `409` já existe).
+
+| Método | Endereço | O que faz | Caso de uso |
+| --- | --- | --- | --- |
+| GET | `/api/status` | Confere se o back-end e o banco estão no ar | |
+| POST | `/api/estudantes` | Cadastra um estudante (com biografia) | UC01 |
+| POST | `/api/login` | Confere email e senha e devolve o estudante | UC02 |
+| POST | `/api/recuperar-senha` | Confere se o email existe para enviar o link | UC02 |
+| GET | `/api/estudantes/{email}/perfil` | Dados, biografia, nº de amigos e de eventos | UC07 |
+| PUT | `/api/estudantes/{email}/biografia` | Salva a biografia | UC07 |
+| GET | `/api/postagens` | Feed com os comentários, da mais nova para a mais antiga | UC08 |
+| POST | `/api/postagens` | Publica uma postagem | UC09 |
+| POST | `/api/postagens/{id}/comentarios` | Comenta uma postagem | UC08 |
+| GET | `/api/stories` | Stories das últimas 24 horas | UC10 |
+| POST | `/api/stories` | Publica um story (vale por 24 horas) | UC10 |
+| GET | `/api/cartas?email=` | Até 3 estudantes que ainda não são seus amigos | UC03 |
+| POST | `/api/amizades` | Adiciona um amigo (libera o chat) | UC03 |
+| GET | `/api/conversas?email=` | Seus amigos com a última mensagem de cada conversa | UC04 |
+| GET | `/api/mensagens?email=&com=` | Histórico da conversa com um amigo | UC04 |
+| POST | `/api/mensagens` | Envia uma mensagem a um amigo | UC04 |
+| GET | `/api/eventos?email=` | Agenda de eventos (e se você já confirmou) | UC06 |
+| POST | `/api/eventos/{id}/presenca` | Confirma presença num evento | UC06 |
+| GET | `/api/produtos` | Produtos do Joga pra Rolo | UC05 |
+| GET | `/api/produtos/pedidos?email=` | Seus produtos reservados e comprados | UC05 |
+| POST | `/api/produtos` | Anuncia um produto | UC11 |
+| POST | `/api/produtos/{id}/reserva` | Reserva e gera o Pix simulado | UC05 |
+| DELETE | `/api/produtos/{id}/reserva?email=` | Cancela a reserva | UC05 |
+| POST | `/api/produtos/{id}/compra` | Conclui a compra | UC05 |

@@ -5,8 +5,7 @@
 const API = "/api";
 
 // ---------- Sessao ----------
-// Por enquanto o login so guarda o e-mail no navegador.
-// Quando o endpoint de login existir, aqui vai o usuario devolvido pela API.
+// Depois do login, o estudante devolvido pela API fica guardado no navegador.
 
 function usuarioAtual() {
     const salvo = localStorage.getItem("unilink.usuario");
@@ -17,6 +16,9 @@ function salvarUsuario(usuario) {
     localStorage.setItem("unilink.usuario", JSON.stringify(usuario));
 }
 
+// Estudante logado (null na tela de login e no cadastro)
+const EU = usuarioAtual();
+
 function sair() {
     localStorage.removeItem("unilink.usuario");
     location.href = "index.html";
@@ -24,14 +26,24 @@ function sair() {
 
 // ---------- Comunicacao com o back-end ----------
 
+// Chama a API e devolve o JSON da resposta.
+// Se a API recusar o pedido, o erro traz a mensagem dela (ex.: "Email ou senha incorretos").
 async function api(caminho, opcoes = {}) {
     const resposta = await fetch(API + caminho, {
-        headers: { "Content-Type": "application/json" },
         ...opcoes,
+        headers: { "Content-Type": "application/json" },
+        body: opcoes.body === undefined ? undefined : JSON.stringify(opcoes.body),
     });
-    if (!resposta.ok) throw new Error(`Erro ${resposta.status} em ${caminho}`);
-    return resposta.status === 204 ? null : resposta.json();
+    const dados = resposta.status === 204 ? null : await resposta.json().catch(() => null);
+    if (!resposta.ok) {
+        const erro = new Error(dados?.message || `Erro ${resposta.status}`);
+        erro.status = resposta.status;
+        throw erro;
+    }
+    return dados;
 }
+
+const enviar = (metodo, caminho, corpo) => api(caminho, { method: metodo, body: corpo });
 
 // ---------- Pedacos de HTML ----------
 
@@ -138,6 +150,12 @@ const PAGINAS = [
 function montarLayout() {
     const atual = document.body.dataset.pagina;
     if (!atual) return;
+
+    // Telas logadas: sem login, volta para a tela de entrar
+    if (!EU) {
+        location.replace("index.html");
+        return;
+    }
 
     document.body.classList.add("logado");
     const marcar = (id) => (id === atual ? 'aria-current="page"' : "");

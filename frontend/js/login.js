@@ -2,7 +2,7 @@
 
 const formLogin = document.getElementById("form-login");
 
-formLogin.addEventListener("submit", (evento) => {
+formLogin.addEventListener("submit", async (evento) => {
     evento.preventDefault();
     limparErros(formLogin);
 
@@ -20,7 +20,14 @@ formLogin.addEventListener("submit", (evento) => {
     }
     if (!valido) return;
 
-    // A conferencia da senha no banco entra quando o endpoint de login existir (31/10)
-    salvarUsuario({ email: email.value.trim() });
-    location.href = "home.html";
+    try {
+        const estudante = await enviar("POST", "/login", { email: email.value.trim(), senha: senha.value });
+        salvarUsuario(estudante);
+        sessionStorage.setItem("unilink.boas-vindas", "1");
+        location.href = "home.html";
+    } catch (erro) {
+        // FE01: credenciais incorretas deixam os dois campos em vermelho
+        marcarErro(email, "");
+        marcarErro(senha, erro.message);
+    }
 });

@@ -1,10 +1,11 @@
 package br.unirio.unilink.model;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
- * Uma linha da tabela postagem, junto com o nome e o curso do autor
- * (que vem da tabela estudante).
+ * Uma linha da tabela postagem, com o nome, curso e campus do autor
+ * (da tabela estudante) e os comentarios da postagem.
  */
 public record Postagem(
         int id,
@@ -14,5 +15,6 @@ public record Postagem(
         String campusAutor,
         String texto,
         String tipoMidia,
-        LocalDateTime dataHoraCriacao) {
+        LocalDateTime dataHoraCriacao,
+        List<Comentario> comentarios) {
 }
