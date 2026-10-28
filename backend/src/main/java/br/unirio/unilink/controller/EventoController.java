@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.unirio.unilink.model.Evento;
-import br.unirio.unilink.model.Presenca;
+import br.unirio.unilink.model.Solicitante;
 import br.unirio.unilink.service.EventoService;
 
 /**
@@ -35,7 +35,7 @@ public class EventoController {
 
     // POST /api/eventos/{id}/presenca -> confirma presenca e atualiza o contador
     @PostMapping("/{id}/presenca")
-    public Evento confirmarPresenca(@PathVariable int id, @RequestBody Presenca presenca) {
-        return service.confirmarPresenca(id, presenca.email());
+    public Evento confirmarPresenca(@PathVariable int id, @RequestBody Solicitante estudante) {
+        return service.confirmarPresenca(id, estudante.email());
     }
 }

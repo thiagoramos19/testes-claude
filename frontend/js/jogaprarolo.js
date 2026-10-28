@@ -1,29 +1,26 @@
 // Joga pra Rolo: anunciar (UC11) e comprar com Pix simulado (UC05)
 
-// Exemplos da carga inicial enquanto o endpoint de produtos nao existe
-const produtos = [
-    { id: 1, titulo: "Livro de História Contemporânea - Usado", preco: 35, vendedor: "Beltrano Santos", status: "DISPONÍVEL" },
-    { id: 2, titulo: "Calculadora Científica Casio FX-82MS", preco: 50, vendedor: "Ciclano Silva", status: "RESERVADO" },
-    { id: 3, titulo: "Memória RAM 8GB DDR4", preco: 120, vendedor: "Fulano de Tal", status: "DISPONÍVEL" },
-];
-const pedidos = [];
+const STATUS = { RESERVADO: "Reservado", VENDIDO: "Vendido" };
+let produtos = [];
 let abaAtual = "ofertas";
 let produtoEmCompra = null;
 
-const reais = (valor) => valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const reais = (valor) => Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-function itemProduto(p, comoPedido) {
+function itemProduto(p) {
     let acao = `<button class="botao" type="button" data-comprar="${p.id}">Comprar</button>`;
-    if (p.status !== "DISPONÍVEL") acao = `<span class="etiqueta">${p.status === "VENDIDO" ? "Vendido" : "Reservado"}</span>`;
-    if (p.meu) acao = `<span class="etiqueta">Seu anúncio</span>`;
-    if (comoPedido) acao = `<a class="botao botao-secundario" href="mensagens.html">${icone("mensagem")}Conversar</a>`;
+    if (p.status !== "DISPONÍVEL") acao = `<span class="etiqueta">${STATUS[p.status]}</span>`;
+    if (p.emailVendedor === EU.email) acao = `<span class="etiqueta">Seu anúncio</span>`;
+    if (abaAtual === "pedidos") {
+        acao = `<a class="botao botao-secundario" href="mensagens.html?com=${encodeURIComponent(p.emailVendedor)}">${icone("mensagem")}Conversar</a>`;
+    }
 
     return `
         <li class="cartao produto">
-            ${avatar(p.vendedor)}
+            ${avatar(p.nomeVendedor)}
             <div class="item-texto">
                 <strong>${escapar(p.titulo)}</strong>
-                <span class="suave pequeno">${escapar(p.vendedor)}</span>
+                <span class="suave pequeno">${escapar(p.nomeVendedor)}${abaAtual === "pedidos" ? ` · ${STATUS[p.status]}` : ""}</span>
             </div>
             <div class="produto-acao">
                 <span class="preco">${reais(p.preco)}</span>
@@ -32,67 +29,77 @@ function itemProduto(p, comoPedido) {
         </li>`;
 }
 
-function renderizarLista() {
-    const lista = abaAtual === "ofertas" ? produtos : pedidos;
+async function carregarLista() {
+    produtos = abaAtual === "ofertas"
+        ? await api("/produtos")
+        : await api(`/produtos/pedidos?email=${encodeURIComponent(EU.email)}`);
     const vazio = abaAtual === "ofertas" ? "Nenhuma oferta no momento." : "Você ainda não comprou nenhum produto.";
-    document.getElementById("lista-produtos").innerHTML = lista.length
-        ? lista.map((p) => itemProduto(p, abaAtual === "pedidos")).join("")
+    document.getElementById("lista-produtos").innerHTML = produtos.length
+        ? produtos.map(itemProduto).join("")
         : `<li class="aviso-vazio">${vazio}</li>`;
 }
 
 // FA01: alternar entre Ofertas e Meus pedidos
-document.querySelectorAll(".abas .etiqueta").forEach((aba) => {
-    aba.addEventListener("click", () => {
-        abaAtual = aba.dataset.aba;
-        document.querySelectorAll(".abas .etiqueta").forEach((a) => {
-            a.classList.toggle("ativo", a === aba);
-            a.setAttribute("aria-selected", a === aba);
-        });
-        renderizarLista();
+function abrirAba(aba) {
+    abaAtual = aba;
+    document.querySelectorAll(".abas .etiqueta").forEach((botao) => {
+        botao.classList.toggle("ativo", botao.dataset.aba === aba);
+        botao.setAttribute("aria-selected", botao.dataset.aba === aba);
     });
+    return carregarLista();
+}
+
+document.querySelectorAll(".abas .etiqueta").forEach((botao) => {
+    botao.addEventListener("click", () => abrirAba(botao.dataset.aba));
 });
 
 // ---------- Comprar ----------
 
 const janelaPix = document.getElementById("janela-pix");
 
-document.getElementById("lista-produtos").addEventListener("click", (evento) => {
+document.getElementById("lista-produtos").addEventListener("click", async (evento) => {
     const botao = evento.target.closest("[data-comprar]");
     if (!botao) return;
-    produtoEmCompra = produtos.find((p) => p.id === Number(botao.dataset.comprar));
-    produtoEmCompra.status = "RESERVADO";
-    document.getElementById("pix-resumo").textContent = `${produtoEmCompra.titulo} · ${reais(produtoEmCompra.preco)}`;
-    document.getElementById("pix-codigo").value =
-        `00020126unilink.pix${produtoEmCompra.id}5204000053039865406${produtoEmCompra.preco.toFixed(2)}`;
-    renderizarLista();
-    janelaPix.showModal();
+    try {
+        const reserva = await enviar("POST", `/produtos/${botao.dataset.comprar}/reserva`, { email: EU.email });
+        produtoEmCompra = reserva.produto;
+        document.getElementById("pix-resumo").textContent = `${produtoEmCompra.titulo} · ${reais(produtoEmCompra.preco)}`;
+        document.getElementById("pix-codigo").value = reserva.codigoPix;
+        janelaPix.showModal();
+    } catch (erro) {
+        toast(erro.message);
+    }
+    carregarLista();
 });
 
 // FE01: desistir devolve o produto para Disponivel
-function cancelarCompra() {
+janelaPix.addEventListener("close", async () => {
     if (!produtoEmCompra) return;
-    produtoEmCompra.status = "DISPONÍVEL";
+    await enviar("DELETE", `/produtos/${produtoEmCompra.id}/reserva?email=${encodeURIComponent(EU.email)}`);
     produtoEmCompra = null;
-    renderizarLista();
-}
+    carregarLista();
+});
 
 document.getElementById("pix-voltar").addEventListener("click", () => janelaPix.close());
-janelaPix.addEventListener("close", cancelarCompra);
 
-document.getElementById("pix-concluir").addEventListener("click", () => {
-    // A reserva no banco (status e fk_email_reserva) entra na semana 2
-    pedidos.unshift(produtoEmCompra);
-    toast(`Seu pedido foi processado, converse com ${produtoEmCompra.vendedor.split(" ")[0]}!`);
+document.getElementById("pix-concluir").addEventListener("click", async () => {
+    const comprado = produtoEmCompra;
     produtoEmCompra = null;
     janelaPix.close();
-    document.querySelector('[data-aba="pedidos"]').click();
+    try {
+        await enviar("POST", `/produtos/${comprado.id}/compra`, { email: EU.email });
+        toast(`Seu pedido foi processado, converse com ${comprado.nomeVendedor.split(" ")[0]}!`);
+        abrirAba("pedidos");
+    } catch (erro) {
+        toast(erro.message);
+    }
 });
 
 // ---------- Anunciar ----------
 
 const formOferta = document.getElementById("form-oferta");
 
-formOferta.addEventListener("submit", (evento) => {
+formOferta.addEventListener("submit", async (evento) => {
     evento.preventDefault();
     limparErros(formOferta);
     const titulo = document.getElementById("titulo");
@@ -110,18 +117,14 @@ formOferta.addEventListener("submit", (evento) => {
     }
     if (!ok) return;
 
-    const usuario = usuarioAtual();
-    produtos.unshift({
-        id: Date.now(),
-        titulo: titulo.value.trim(),
-        preco: valor,
-        vendedor: usuario?.nome ?? usuario?.email ?? "Você",
-        status: "DISPONÍVEL",
-        meu: true,
-    });
-    formOferta.reset();
-    document.querySelector('[data-aba="ofertas"]').click();
-    toast("Oferta criada!");
+    try {
+        await enviar("POST", "/produtos", { emailVendedor: EU.email, titulo: titulo.value.trim(), preco: valor });
+        formOferta.reset();
+        toast("Oferta criada!");
+        abrirAba("ofertas");
+    } catch (erro) {
+        toast(erro.message);
+    }
 });
 
-renderizarLista();
+if (EU) carregarLista();
