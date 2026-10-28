@@ -1,44 +1,17 @@
 // Cards de descobrir e adicionar amigo (UC03)
 
-// Exemplos da carga inicial enquanto o endpoint de perfis nao existe
-const perfis = [
-    {
-        nome: "Ciclano Silva", idade: 21, curso: "Biblioteconomia", campus: "CCH",
-        gostos: "Organizar livros por cor, Cultura pop depressiva, Memes intelectuais",
-        frase: "Leio tudo que vejo pela frente, inclusive entrelinhas de mensagens de bom dia.",
-        mood: "Disposto a recomendar um livro pra cada pessoa que der match.",
-        funfact: "Já li a biblioteca inteira do CCH",
-    },
-    {
-        nome: "Fulano de Tal", idade: 23, curso: "Matemática", campus: "CCET",
-        gostos: "Cálculo e seus desafios, Sair à noite, Cuidar de planta",
-        frase: "Minha vida é 80% concreto e 20% desespero.",
-        mood: "Procurando alguém para me ajudar a entender Estatística.",
-        funfact: "Sei de cor os primeiros 50 dígitos do Pi",
-    },
-    {
-        nome: "Beltrano Santos", idade: 22, curso: "História", campus: "CCH",
-        gostos: "Avaliar filmes no Letterboxd, Música indie underground, Networking",
-        frase: "Otimizando minha vida pessoal com a mesma eficiência de uma planilha.",
-        mood: "Ansioso para o próximo churrasco da atlética.",
-        funfact: "Assisto filmes antigos em velocidade 1.5x",
-    },
-    {
-        nome: "Amanda Brandes", idade: 23, curso: "Sistemas de Informação", campus: "CCET",
-        gostos: "Design IHC, Café expresso, Maratona de séries",
-        frase: "A simplicidade é o último grau da sofisticação.",
-        mood: "Animada para os testes heurísticos",
-        funfact: "Tenho uma coleção de cadernos de prototipação",
-    },
-];
-
-const TAMANHO_MAO = 3;
 let mao = [];
 let selecionada = null;
 let virada = false;
 
-function embaralhar() {
-    mao = [...perfis].sort(() => Math.random() - 0.5).slice(0, TAMANHO_MAO);
+// Pede ao back-end ate 3 estudantes que ainda nao sao seus amigos
+async function embaralhar() {
+    try {
+        mao = await api(`/cartas?email=${encodeURIComponent(EU.email)}`);
+    } catch (erro) {
+        toast(erro.message);
+        mao = [];
+    }
     selecionada = mao[0] ?? null;
     virada = false;
     renderizar();
@@ -55,17 +28,18 @@ function frenteCarta(p) {
 }
 
 function versoCarta(p) {
-    const gostos = p.gostos.split(",").map((g) => `<li>${escapar(g.trim())}</li>`).join("");
+    const bio = p.biografia ?? {};
+    const gostos = (bio.gostos ?? "").split(",").filter((g) => g.trim())
+        .map((g) => `<li>${escapar(g.trim())}</li>`).join("");
+    const trecho = (titulo, texto) => (texto ? `<h3>${titulo}</h3><p>${escapar(texto)}</p>` : "");
+    const vazia = !gostos && !bio.frase && !bio.mood && !bio.funfact;
     return `
         <div class="carta-face carta-verso">
-            <h3>Três coisas que amo</h3>
-            <ul class="lista-pontos">${gostos}</ul>
-            <h3>Sobre mim</h3>
-            <p>“${escapar(p.frase)}”</p>
-            <h3>Mood atual</h3>
-            <p>${escapar(p.mood)}</p>
-            <h3>Fun fact / red flag</h3>
-            <p>${escapar(p.funfact)}</p>
+            ${gostos ? `<h3>Três coisas que amo</h3><ul class="lista-pontos">${gostos}</ul>` : ""}
+            ${trecho("Sobre mim", bio.frase)}
+            ${trecho("Mood atual", bio.mood)}
+            ${trecho("Fun fact / red flag", bio.funfact)}
+            ${vazia ? `<p class="suave">Essa pessoa ainda não escreveu a biografia.</p>` : ""}
         </div>`;
 }
 
@@ -104,14 +78,20 @@ function renderizar() {
     document.getElementById("adicionar").addEventListener("click", adicionarAmigo);
 }
 
-function adicionarAmigo() {
-    // O pedido de amizade no banco (solicitacao_amizade) entra na semana 2
-    toast(`Você adicionou ${selecionada.nome.split(" ")[0]} aos amigos, entre no Chat para conversar!`);
-    perfis.splice(perfis.indexOf(selecionada), 1);
+async function adicionarAmigo() {
+    try {
+        await enviar("POST", "/amizades", { solicitante: EU.email, solicitado: selecionada.email });
+    } catch (erro) {
+        toast(erro.message);
+        return;
+    }
+    toast(`Você adicionou ${selecionada.nome.split(" ")[0]} aos amigos, entre no Chat para conversar com ele(a)!`);
     mao.splice(mao.indexOf(selecionada), 1);
     selecionada = mao[0] ?? null;
     virada = false;
-    renderizar();
+    // Acabou a mao: busca novas cartas (ou mostra o aviso do FE01)
+    if (!selecionada) embaralhar();
+    else renderizar();
 }
 
 document.getElementById("mao").addEventListener("click", (evento) => {

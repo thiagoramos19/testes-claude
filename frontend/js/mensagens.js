@@ -7,65 +7,80 @@ const RESPOSTAS_UNIBOT = {
 };
 const MENU_UNIBOT = "Oi! Eu sou o Unibot. Digite 1 para ver o cardápio do bandejão ou 2 para ver o horário de aulas.";
 
-// Exemplos enquanto o endpoint de mensagens nao existe
-const conversas = [
-    {
-        amigo: "Amanda Brandes",
-        mensagens: [
-            { minha: true, texto: "Oi Amanda, ajustei as telas de protótipo do Unilink!", hora: "19:50" },
-            { minha: false, texto: "Perfeito Thiago! Vou atualizar o relatório técnico com as capturas.", hora: "19:55" },
-        ],
-    },
-    { amigo: "Ciclano Silva", mensagens: [{ minha: false, texto: "Bora estudar pra P1?", hora: "12:21" }] },
-    { amigo: UNIBOT, mensagens: [{ minha: false, texto: MENU_UNIBOT, hora: "" }] },
-];
+// De quanto em quanto tempo a tela pergunta ao back-end se chegou mensagem nova
+const INTERVALO_ATUALIZAR = 4000;
+
+// O Unibot nao fica no banco: a conversa dele existe so nesta tela
+const unibot = {
+    email: null,
+    nome: UNIBOT,
+    mensagens: [{ minha: false, texto: MENU_UNIBOT, dataHora: null }],
+};
+
+let conversas = [];
 let conversaAberta = null;
+let mensagensAbertas = [];
 
-const horaAgora = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const hora = (data) => (data ? new Date(data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "");
 
-function avatarConversa(nome) {
-    return nome === UNIBOT ? `<span class="avatar tom-2" aria-hidden="true">${icone("robo")}</span>` : avatar(nome);
+function avatarConversa(c) {
+    return c === unibot ? `<span class="avatar tom-2" aria-hidden="true">${icone("robo")}</span>` : avatar(c.nome);
+}
+
+// Ultima mensagem que aparece embaixo do nome na lista
+function resumo(c) {
+    if (c === unibot) {
+        const ultima = unibot.mensagens[unibot.mensagens.length - 1];
+        return { texto: ultima.texto, minha: ultima.minha, dataHora: ultima.dataHora };
+    }
+    return { texto: c.ultimaMensagem ?? "Diga oi!", minha: c.ultimaFoiMinha, dataHora: c.dataHora };
 }
 
 function renderizarLista() {
-    document.getElementById("lista-conversas").innerHTML = conversas.map((c, i) => {
-        const ultima = c.mensagens[c.mensagens.length - 1];
+    const todas = [...conversas, unibot];
+    document.getElementById("lista-conversas").innerHTML = todas.map((c, i) => {
+        const r = resumo(c);
+        const ativa = conversaAberta && c.email === conversaAberta.email;
         return `
             <li>
-                <button class="cartao item-lista ${c === conversaAberta ? "ativo" : ""}" type="button" data-indice="${i}">
-                    ${avatarConversa(c.amigo)}
+                <button class="cartao item-lista ${ativa ? "ativo" : ""}" type="button" data-indice="${i}">
+                    ${avatarConversa(c)}
                     <span class="item-texto">
-                        <strong>${escapar(c.amigo)}</strong>
-                        <span class="suave pequeno uma-linha">${ultima.minha ? "Você: " : ""}${escapar(ultima.texto)}</span>
+                        <strong>${escapar(c.nome)}</strong>
+                        <span class="suave pequeno uma-linha">${r.minha ? "Você: " : ""}${escapar(r.texto)}</span>
                     </span>
-                    <span class="suave pequeno">${ultima.hora}</span>
+                    <span class="suave pequeno">${hora(r.dataHora)}</span>
                 </button>
             </li>`;
     }).join("");
 }
 
+// So os baloes; o campo de digitar nao e refeito para nao perder o texto
+function renderizarBaloes() {
+    const lista = document.getElementById("chat-mensagens");
+    if (!lista) return;
+    lista.innerHTML = mensagensAbertas.map((m) => `
+        <li class="balao ${m.minha ? "meu" : ""}">${escapar(m.texto)}<span>${hora(m.dataHora)}</span></li>
+    `).join("");
+    lista.scrollTop = lista.scrollHeight;
+}
+
 function renderizarChat() {
     const c = conversaAberta;
-    const baloes = c.mensagens.map((m) => `
-        <li class="balao ${m.minha ? "meu" : ""}">${escapar(m.texto)}<span>${m.hora}</span></li>
-    `).join("");
-
     document.getElementById("chat").innerHTML = `
         <div class="cartao chat">
             <header class="chat-topo">
                 <button class="botao-icone so-celular" type="button" id="voltar-lista" aria-label="Voltar para conversas">${icone("voltar")}</button>
-                ${avatarConversa(c.amigo)}
-                <h2>${escapar(c.amigo)}</h2>
+                ${avatarConversa(c)}
+                <h2>${escapar(c.nome)}</h2>
             </header>
-            <ol class="chat-mensagens" id="chat-mensagens">${baloes}</ol>
+            <ol class="chat-mensagens" id="chat-mensagens"></ol>
             <form class="chat-enviar" id="form-mensagem">
-                <input class="entrada" id="texto-mensagem" placeholder="Digite uma mensagem" autocomplete="off" aria-label="Mensagem">
+                <input class="entrada" id="texto-mensagem" placeholder="Digite uma mensagem" maxlength="1000" autocomplete="off" aria-label="Mensagem">
                 <button class="botao-icone botao-enviar" type="submit" aria-label="Enviar">${icone("enviar")}</button>
             </form>
         </div>`;
-
-    const lista = document.getElementById("chat-mensagens");
-    lista.scrollTop = lista.scrollHeight;
+    renderizarBaloes();
 
     document.getElementById("form-mensagem").addEventListener("submit", enviarMensagem);
     document.getElementById("voltar-lista").addEventListener("click", () => {
@@ -74,28 +89,88 @@ function renderizarChat() {
     document.getElementById("texto-mensagem").focus();
 }
 
-function enviarMensagem(evento) {
-    evento.preventDefault();
-    const texto = document.getElementById("texto-mensagem").value.trim();
-    // FE01: mensagem em branco e ignorada
-    if (!texto) return;
+// ---------- Conversa com o back-end ----------
 
-    // A gravacao na tabela mensagem entra na semana 2
-    conversaAberta.mensagens.push({ minha: true, texto, hora: horaAgora() });
-    if (conversaAberta.amigo === UNIBOT) {
-        conversaAberta.mensagens.push({ minha: false, texto: RESPOSTAS_UNIBOT[texto] ?? MENU_UNIBOT, hora: horaAgora() });
+async function carregarConversas() {
+    try {
+        conversas = await api(`/conversas?email=${encodeURIComponent(EU.email)}`);
+    } catch {
+        conversas = [];
     }
     renderizarLista();
+}
+
+async function carregarHistorico() {
+    if (!conversaAberta || conversaAberta === unibot) return;
+    const com = conversaAberta.email;
+    const historico = await api(`/mensagens?email=${encodeURIComponent(EU.email)}&com=${encodeURIComponent(com)}`);
+    // O estudante pode ter trocado de conversa enquanto a resposta chegava
+    if (conversaAberta?.email !== com) return;
+    const mudou = historico.length !== mensagensAbertas.length;
+    mensagensAbertas = historico.map((m) => ({ minha: m.remetente === EU.email, texto: m.texto, dataHora: m.dataHora }));
+    if (mudou) renderizarBaloes();
+}
+
+async function abrirConversa(c) {
+    conversaAberta = c;
+    mensagensAbertas = c === unibot ? unibot.mensagens : [];
+    document.getElementById("mensagens").classList.add("mostrando-detalhe");
+    renderizarLista();
     renderizarChat();
+    try {
+        await carregarHistorico();
+    } catch (erro) {
+        toast(erro.message);
+    }
+}
+
+async function enviarMensagem(evento) {
+    evento.preventDefault();
+    const entrada = document.getElementById("texto-mensagem");
+    const texto = entrada.value.trim();
+    // FE01: mensagem em branco e ignorada
+    if (!texto) return;
+    entrada.value = "";
+
+    if (conversaAberta === unibot) {
+        const agora = new Date();
+        unibot.mensagens.push({ minha: true, texto, dataHora: agora });
+        unibot.mensagens.push({ minha: false, texto: RESPOSTAS_UNIBOT[texto] ?? MENU_UNIBOT, dataHora: agora });
+        renderizarBaloes();
+        renderizarLista();
+        return;
+    }
+
+    try {
+        await enviar("POST", "/mensagens", { remetente: EU.email, destinatario: conversaAberta.email, texto });
+    } catch (erro) {
+        entrada.value = texto;
+        toast(erro.message);
+        return;
+    }
+    await carregarHistorico();
+    carregarConversas();
 }
 
 document.getElementById("lista-conversas").addEventListener("click", (evento) => {
     const botao = evento.target.closest("[data-indice]");
     if (!botao) return;
-    conversaAberta = conversas[Number(botao.dataset.indice)];
-    document.getElementById("mensagens").classList.add("mostrando-detalhe");
-    renderizarLista();
-    renderizarChat();
+    abrirConversa([...conversas, unibot][Number(botao.dataset.indice)]);
 });
 
-renderizarLista();
+async function iniciar() {
+    await carregarConversas();
+    // mensagens.html?com=email abre direto a conversa com esse amigo (vem do Joga pra Rolo)
+    const com = new URLSearchParams(location.search).get("com");
+    const amigo = conversas.find((c) => c.email === com);
+    if (amigo) abrirConversa(amigo);
+    else if (com) toast("Adicione essa pessoa como amiga no Descobrir para conversar.");
+
+    // Mensagens novas aparecem sem recarregar a pagina
+    setInterval(() => {
+        carregarHistorico().catch(() => {});
+        carregarConversas();
+    }, INTERVALO_ATUALIZAR);
+}
+
+iniciar();
