@@ -371,3 +371,32 @@ body.acesso {
 .ajuda details p { padding-bottom: 12px; color: var(--texto-suave); }
 
 .link-discreto { justify-self: end; margin-top: -6px; font-size: 0.85rem; font-weight: 700; color: var(--verde); }
+
+/* ---------- Stories (camera e visualizacao) ---------- */
+
+.story-novo.tem-story .story-anel { background: linear-gradient(135deg, var(--rosa), var(--verde)); }
+
+.camera {
+    overflow: hidden;
+    margin: 16px 0;
+    border-radius: var(--raio-pequeno);
+    background: var(--texto);
+    aspect-ratio: 3 / 4;
+}
+.camera video,
+.camera img { width: 100%; height: 100%; object-fit: cover; }
+/* Espelha a previa da camera frontal, como um espelho */
+.camera video { transform: scaleX(-1); }
+
+.janela-story { display: none; gap: 14px; }
+.janela-story[open] { display: grid; }
+.story-topo { display: flex; align-items: center; gap: 12px; }
+.story-conteudo {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: var(--raio-pequeno);
+    background: linear-gradient(135deg, var(--rosa), var(--verde));
+    aspect-ratio: 3 / 4;
+}
+.story-conteudo img { width: 100%; height: 100%; object-fit: cover; }

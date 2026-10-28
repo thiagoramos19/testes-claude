@@ -72,6 +72,26 @@
         </aside>
     </main>
 
+    <!-- Camera para publicar story (UC10) -->
+    <dialog class="janela" id="janela-camera">
+        <h2>Novo story</h2>
+        <div class="camera">
+            <video id="camera-video" autoplay playsinline muted></video>
+            <img id="camera-foto" class="oculto" alt="Foto capturada para o story">
+        </div>
+        <div class="acoes-passo">
+            <button class="botao botao-contorno" type="button" id="camera-voltar">Voltar</button>
+            <button class="botao" type="button" id="camera-capturar">Capturar</button>
+        </div>
+    </dialog>
+
+    <!-- Ver um story -->
+    <dialog class="janela janela-story" id="janela-story">
+        <header class="story-topo" id="story-topo"></header>
+        <div class="story-conteudo" id="story-conteudo"></div>
+        <button class="botao botao-contorno botao-largo" type="button" id="story-fechar">Fechar</button>
+    </dialog>
+
     <script src="js/app.js" defer></script>
     <script src="js/home.js" defer></script>
 </body>

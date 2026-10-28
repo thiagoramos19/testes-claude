@@ -3,13 +3,6 @@
 const NOMES_MIDIA = { IMAGEM: "Imagem", MUSICA: "Música", LIVRO: "Livro", ARQUIVO: "Arquivo" };
 const ICONES_MIDIA = { IMAGEM: "imagem", MUSICA: "musica", LIVRO: "livro", ARQUIVO: "clipe" };
 
-// Exemplos enquanto stories e eventos ainda nao tem endpoint
-const stories = ["Ciclano Silva", "Thiago Ramos Ivo", "Beltrano Santos", "Fulano de Tal"];
-const proximosEventos = [
-    { nome: "Acende o Farol - Atlética ADM", data: "2026-12-03T18:00", local: "Campus Pasteur - CCH" },
-    { nome: "Workshop de Prototipagem IHC", data: "2026-12-04T14:00", local: "CCET - Auditório" },
-];
-
 let postagens = [];
 let filtroAtual = "TODOS";
 let tipoMidia = "NENHUMA";
@@ -161,35 +154,151 @@ document.getElementById("feed").addEventListener("submit", async (evento) => {
     renderizarFeed();
 });
 
-// ---------- Stories e eventos ----------
+// ---------- Stories (UC10) ----------
 
-function renderizarLaterais() {
-    const usuario = usuarioAtual();
-    document.getElementById("avatar-story").outerHTML = avatar(usuario?.nome ?? usuario?.email ?? "Você", "avatar-story");
-    document.getElementById("lista-stories").innerHTML = stories.map((nome) => `
-        <button class="story" type="button">
-            <span class="story-anel">${avatar(nome, "avatar-story")}</span>
-            <span class="story-nome">${escapar(nome.split(" ")[0])}</span>
-        </button>
-    `).join("");
+let stories = [];
+// O banco nao guarda a foto: a que voce tirar agora fica so nesta tela
+let minhaFoto = null;
 
-    document.getElementById("proximos-eventos").innerHTML = proximosEventos.map((e) => {
-        const data = new Date(e.data);
-        return `
-            <li>
-                <span class="data-evento"><strong>${data.getDate()}</strong>${data.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</span>
-                <div><h3>${escapar(e.nome)}</h3><p class="suave pequeno">${escapar(e.local)}</p></div>
-            </li>`;
-    }).join("");
+// Um circulo por pessoa, com o story mais recente dela
+function storiesPorAutor() {
+    const vistos = new Set();
+    return stories.filter((s) => !vistos.has(s.emailAutor) && vistos.add(s.emailAutor));
 }
 
-document.getElementById("novo-story").addEventListener("click", () => {
-    toast("Publicar stories estará disponível em breve.");
+function renderizarStories() {
+    document.getElementById("novo-story").classList.toggle("tem-story", stories.some((s) => s.emailAutor === EU.email));
+    document.getElementById("lista-stories").innerHTML = storiesPorAutor().map((s) => `
+        <button class="story" type="button" data-id="${s.id}">
+            <span class="story-anel">${avatar(s.nomeAutor, "avatar-story")}</span>
+            <span class="story-nome">${s.emailAutor === EU.email ? "Você" : escapar(s.nomeAutor.split(" ")[0])}</span>
+        </button>
+    `).join("");
+}
+
+async function carregarStories() {
+    try {
+        stories = await api("/stories");
+    } catch {
+        stories = [];
+    }
+    renderizarStories();
+}
+
+const janelaStory = document.getElementById("janela-story");
+
+document.getElementById("lista-stories").addEventListener("click", (evento) => {
+    const botao = evento.target.closest(".story");
+    if (!botao) return;
+    const s = stories.find((x) => x.id === Number(botao.dataset.id));
+    document.getElementById("story-topo").innerHTML = `
+        ${avatar(s.nomeAutor)}
+        <div><h3>${escapar(s.nomeAutor)}</h3><p class="suave pequeno">${tempoRelativo(s.horaCriacao)}</p></div>`;
+    const foto = s.emailAutor === EU.email && minhaFoto;
+    document.getElementById("story-conteudo").innerHTML = foto
+        ? `<img src="${foto}" alt="Story de ${escapar(s.nomeAutor)}">`
+        : avatar(s.nomeAutor, "avatar-grande");
+    janelaStory.showModal();
 });
+document.getElementById("story-fechar").addEventListener("click", () => janelaStory.close());
+
+// Camera: abrir, capturar, publicar ou voltar
+const janelaCamera = document.getElementById("janela-camera");
+const video = document.getElementById("camera-video");
+const fotoCapturada = document.getElementById("camera-foto");
+const botaoCapturar = document.getElementById("camera-capturar");
+let transmissao = null;
+
+function desligarCamera() {
+    transmissao?.getTracks().forEach((faixa) => faixa.stop());
+    transmissao = null;
+}
+
+async function abrirCamera() {
+    try {
+        transmissao = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+    } catch {
+        // FE01: permissao negada ou camera com problema
+        toast("Não conseguimos abrir a câmera. Permita o acesso nas configurações do navegador e tente de novo.");
+        return;
+    }
+    video.srcObject = transmissao;
+    video.classList.remove("oculto");
+    fotoCapturada.classList.add("oculto");
+    botaoCapturar.textContent = "Capturar";
+    janelaCamera.showModal();
+}
+
+function capturar() {
+    const tela = document.createElement("canvas");
+    tela.width = video.videoWidth;
+    tela.height = video.videoHeight;
+    const pincel = tela.getContext("2d");
+    // Mesma imagem espelhada que aparece na previa
+    pincel.translate(tela.width, 0);
+    pincel.scale(-1, 1);
+    pincel.drawImage(video, 0, 0);
+    fotoCapturada.src = tela.toDataURL("image/jpeg", 0.85);
+    fotoCapturada.classList.remove("oculto");
+    video.classList.add("oculto");
+    desligarCamera();
+    botaoCapturar.textContent = "Publicar";
+}
+
+async function publicarStory() {
+    try {
+        await enviar("POST", "/stories", { emailAutor: EU.email });
+    } catch (erro) {
+        toast(erro.message);
+        return;
+    }
+    minhaFoto = fotoCapturada.src;
+    janelaCamera.close();
+    toast("Story publicado! Ele some em 24 horas.");
+    carregarStories();
+}
+
+document.getElementById("avatar-story").outerHTML = avatar(EU.nome, "avatar-story");
+document.getElementById("novo-story").addEventListener("click", abrirCamera);
+botaoCapturar.addEventListener("click", () => (transmissao ? capturar() : publicarStory()));
+// FA01: voltar sem salvar
+document.getElementById("camera-voltar").addEventListener("click", () => janelaCamera.close());
+// Fechar a janela (inclusive pela tecla Esc) sempre desliga a camera
+janelaCamera.addEventListener("close", desligarCamera);
+
+// ---------- Proximos eventos ----------
+
+async function carregarProximosEventos() {
+    const lista = document.getElementById("proximos-eventos");
+    try {
+        const eventos = await api(`/eventos?email=${encodeURIComponent(EU.email)}`);
+        const proximos = eventos
+            .filter((e) => new Date(e.dataHora) > new Date())
+            .sort((a, b) => new Date(a.dataHora) - new Date(b.dataHora))
+            .slice(0, 3);
+        lista.innerHTML = proximos.map((e) => {
+            const data = new Date(e.dataHora);
+            return `
+                <li>
+                    <span class="data-evento"><strong>${data.getDate()}</strong>${data.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</span>
+                    <div><h3>${escapar(e.nome)}</h3><p class="suave pequeno">${escapar(e.local)}</p></div>
+                </li>`;
+        }).join("") || `<li class="suave">Nenhum evento marcado.</li>`;
+    } catch {
+        lista.innerHTML = `<li class="suave">Não foi possível carregar os eventos.</li>`;
+    }
+}
 
 document.querySelectorAll("#filtros .etiqueta").forEach((botao) => {
     botao.addEventListener("click", () => aplicarFiltro(botao.dataset.filtro));
 });
 
-renderizarLaterais();
+// Recado de boas-vindas logo depois do login
+if (sessionStorage.getItem("unilink.boas-vindas")) {
+    sessionStorage.removeItem("unilink.boas-vindas");
+    toast(`Que bom te ver, ${EU.nome.split(" ")[0]}!`);
+}
+
+carregarStories();
+carregarProximosEventos();
 carregarFeed();
