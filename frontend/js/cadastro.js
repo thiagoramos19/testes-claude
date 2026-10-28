@@ -63,7 +63,7 @@ botaoVoltar.addEventListener("click", () => {
     mostrarPasso(passo - 1);
 });
 
-formCadastro.addEventListener("submit", (evento) => {
+formCadastro.addEventListener("submit", async (evento) => {
     evento.preventDefault();
     limparErros(formCadastro);
     if (!validacoes[passo]()) return;
@@ -73,9 +73,30 @@ formCadastro.addEventListener("submit", (evento) => {
         return;
     }
 
-    // A gravacao no banco (POST /api/estudantes) entra junto com o login, em 31/10
-    salvarUsuario({ email: valor("email"), nome: valor("nome") });
-    location.href = "home.html";
+    try {
+        const estudante = await enviar("POST", "/estudantes", {
+            email: valor("email"),
+            senha: valor("senha"),
+            nome: valor("nome"),
+            dataNascimento: valor("nascimento"),
+            curso: valor("curso"),
+            campus: valor("campus"),
+            gostos: valor("gostos"),
+            frase: valor("frase"),
+            mood: valor("mood"),
+            funfact: valor("funfact"),
+        });
+        salvarUsuario(estudante);
+        location.href = "home.html";
+    } catch (erro) {
+        // E-mail ja cadastrado: volta para o primeiro passo e mostra o erro no campo
+        if (erro.status === 409) {
+            mostrarPasso(1);
+            marcarErro(document.getElementById("email"), erro.message);
+        } else {
+            toast(erro.message);
+        }
+    }
 });
 
 mostrarPasso(1);

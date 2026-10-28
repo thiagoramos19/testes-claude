@@ -370,3 +370,5 @@ body.acesso {
 .ajuda details { border-top: 1px solid var(--borda); }
 .ajuda summary { padding: 12px 0; font-weight: 700; cursor: pointer; }
 .ajuda details p { padding-bottom: 12px; color: var(--texto-suave); }
+
+.link-discreto { justify-self: end; margin-top: -6px; font-size: 0.85rem; font-weight: 700; color: var(--verde); }
