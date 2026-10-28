@@ -111,7 +111,7 @@ document.getElementById("arquivo-imagem").addEventListener("change", (evento) =>
     escolherTipo("IMAGEM");
 });
 
-formPostagem.addEventListener("submit", (evento) => {
+formPostagem.addEventListener("submit", async (evento) => {
     evento.preventDefault();
     const texto = textoPostagem.value.trim();
     const temImagem = !previaImagem.classList.contains("oculto");
@@ -123,19 +123,15 @@ formPostagem.addEventListener("submit", (evento) => {
         return;
     }
 
-    // A gravacao no banco (POST /api/postagens) entra em 02/11
-    const usuario = usuarioAtual();
-    postagens.unshift({
-        id: Date.now(),
-        nomeAutor: usuario?.nome ?? usuario?.email ?? "Você",
-        cursoAutor: "Seu curso",
-        campusAutor: "",
-        texto,
-        tipoMidia,
-        imagemLocal: temImagem ? previaImagem.src : null,
-        dataHoraCriacao: new Date().toISOString(),
-        comentarios: [],
-    });
+    try {
+        const nova = await enviar("POST", "/postagens", { emailAutor: EU.email, texto, tipoMidia });
+        // O banco nao guarda o arquivo da imagem; a previa fica so nesta tela
+        if (temImagem) nova.imagemLocal = previaImagem.src;
+        postagens.unshift(nova);
+    } catch (erro) {
+        toast(erro.message);
+        return;
+    }
 
     formPostagem.reset();
     previaImagem.classList.add("oculto");
@@ -146,7 +142,7 @@ formPostagem.addEventListener("submit", (evento) => {
 
 // ---------- Comentarios ----------
 
-document.getElementById("feed").addEventListener("submit", (evento) => {
+document.getElementById("feed").addEventListener("submit", async (evento) => {
     if (!evento.target.matches(".comentar")) return;
     evento.preventDefault();
     const entrada = evento.target.comentario;
@@ -154,9 +150,14 @@ document.getElementById("feed").addEventListener("submit", (evento) => {
     if (!texto) return;
 
     const id = Number(evento.target.closest(".postagem").dataset.id);
+    try {
+        await enviar("POST", `/postagens/${id}/comentarios`, { emailAutor: EU.email, texto });
+    } catch (erro) {
+        toast(erro.message);
+        return;
+    }
     const postagem = postagens.find((p) => p.id === id);
-    const usuario = usuarioAtual();
-    postagem.comentarios = [...(postagem.comentarios ?? []), { nomeAutor: usuario?.nome ?? "Você", texto }];
+    postagem.comentarios = [...postagem.comentarios, { nomeAutor: EU.nome, texto }];
     renderizarFeed();
 });
 
